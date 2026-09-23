@@ -344,35 +344,282 @@
     });
   }
 
+  /* ---------- Program detail accordions (B.Sc. colleges + Master's) ---------- */
+  // Reusable component. Any element with data-program="<id>" becomes an
+  // expandable program card whose details are rendered from
+  // window.AGLOBAL_PROGRAMS (assets/js/programs-data.js).
+  //  - A card that already has its header/handbook markup just gets its
+  //    details panel filled in.
+  //  - An empty <div data-program="id"></div> is rendered in full from data,
+  //    so new programs can be added without writing any card markup.
+  // Only one program per list is open at a time; the handbook link sits
+  // outside the toggle button so it never opens/closes the card.
+  var ICON_CHEVRON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down size-4" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>';
+  var ICON_CHECK = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+  var ICON_DOWNLOAD = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download size-4" aria-hidden="true"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg>';
+
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function checkList(items, listClass) {
+    if (!items || !items.length) return '';
+    return '<ul class="' + listClass + '">' + items.map(function (item) {
+      var body = (item && typeof item === 'object')
+        ? '<span><strong class="font-semibold text-primary">' + esc(item.title) + '</strong>' +
+          (item.text ? '<span class="program-card__sub"> ' + esc(item.text) + '</span>' : '') + '</span>'
+        : '<span>' + esc(item) + '</span>';
+      return '<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">' + ICON_CHECK + body + '</li>';
+    }).join('') + '</ul>';
+  }
+
+  function section(title, inner, extraClass) {
+    if (!inner) return '';
+    return '<div class="program-card__section ' + (extraClass || '') + '"><h4 class="eyebrow text-primary">' + esc(title) + '</h4>' + inner + '</div>';
+  }
+
+  function renderProgramDetails(p) {
+    var html = '<div class="border-t border-border p-7">';
+
+    if (p.facts && p.facts.length) {
+      html += '<dl class="program-card__facts grid gap-4 ' + (p.facts.length === 4 ? 'sm:grid-cols-2' : 'sm:grid-cols-3') + '">' + p.facts.map(function (f) {
+        return '<div class="rounded-2xl bg-mist p-4"><dt class="text-[0.65rem] font-black uppercase tracking-widest text-primary/60">' +
+          esc(f.label) + '</dt><dd class="mt-1 text-sm font-semibold text-primary">' + esc(f.value) + '</dd></div>';
+      }).join('') + '</dl>';
+    }
+
+    if (p.overview) {
+      html += section('Program overview', '<p class="mt-4 text-sm leading-relaxed text-muted-foreground">' + esc(p.overview) + '</p>', 'mt-8');
+    }
+
+    var studyHtml = section('What you will study', checkList(p.study, 'mt-4 space-y-2.5'));
+    var careerInner = checkList(p.careers, 'mt-4 space-y-2.5');
+    if (p.industries) {
+      careerInner += '<p class="mt-4 text-xs leading-relaxed text-muted-foreground"><span class="font-bold text-primary">Industries:</span> ' + esc(p.industries) + '</p>';
+    }
+    var careerHtml = section('Career outcomes', careerInner);
+    if (studyHtml || careerHtml) {
+      html += '<div class="mt-8 grid gap-8 border-t border-border pt-6 sm:grid-cols-2">' + studyHtml + careerHtml + '</div>';
+    }
+
+    if (p.specializations && p.specializations.length) {
+      html += section(p.specializationsLabel || 'Specializations',
+        '<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + p.specializations.map(function (sp) {
+          return '<div class="rounded-2xl border border-border p-5"><p class="text-sm font-bold text-primary">' + esc(sp.name) + '</p>' +
+            (sp.text ? '<p class="mt-2 text-sm leading-relaxed text-muted-foreground">' + esc(sp.text) + '</p>' : '') + '</div>';
+        }).join('') + '</div>', 'mt-8 border-t border-border pt-6');
+    }
+
+    html += section('Admission requirements', checkList(p.admission, 'mt-4 grid gap-2.5 sm:grid-cols-2'), 'mt-8 border-t border-border pt-6');
+
+    var certHtml = section('Professional certifications', checkList(p.certifications, 'mt-4 space-y-2.5'));
+    var pracHtml = section('Practical learning', checkList(p.practical, 'mt-4 space-y-2.5'));
+    if (certHtml || pracHtml) {
+      html += '<div class="mt-8 grid gap-8 border-t border-border pt-6 sm:grid-cols-2">' + certHtml + pracHtml + '</div>';
+    }
+
+    return html + '</div>';
+  }
+
+  function renderProgramCard(el, id, p) {
+    var root = window.AGLOBAL_SITE_ROOT || '';
+    var hb = p.handbook || {};
+    var eyebrow = p.level === 'bsc' ? '<span class="eyebrow text-accent">B.Sc.</span>' : '';
+    el.className = (el.className ? el.className + ' ' : '') + 'card-lift overflow-hidden rounded-3xl border border-border bg-card program-card';
+    el.innerHTML =
+      '<button type="button" aria-expanded="false" aria-controls="program-details-' + esc(id) + '" class="program-card__toggle flex w-full cursor-pointer items-start gap-4 p-7 text-left">' +
+        '<div class="min-w-0 flex-1">' + eyebrow +
+          '<h3 class="' + (eyebrow ? 'mt-2 ' : '') + 'text-lg font-bold text-primary">' + esc(p.name) + '</h3>' +
+          '<p class="mt-3 text-sm leading-relaxed text-muted-foreground">' + esc(p.shortDescription) + '</p>' +
+        '</div>' +
+        '<span class="grid size-9 shrink-0 place-items-center rounded-full border border-border text-primary transition-transform duration-300 ">' + ICON_CHEVRON + '</span>' +
+      '</button>' +
+      '<div id="program-details-' + esc(id) + '" class="program-card__details overflow-hidden" data-program-details role="region" aria-label="' + esc(p.name) + ' program details" style="height: 0px; opacity: 0;"></div>' +
+      (hb.url ?
+      '<div class="program-card__handbook border-t border-border p-7"><div class="flex flex-col items-start gap-2">' +
+        '<a href="' + esc(root + hb.url) + '" download="' + esc(hb.fileName || '') + '" class="surface-copper group inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold text-accent-foreground shadow-copper transition-transform duration-300 hover:-translate-y-1">' + ICON_DOWNLOAD + 'Download Program Handbook</a>' +
+        '<p class="text-xs text-muted-foreground">' + esc(hb.note || ('PDF · ' + p.name + ' program brochure and handbook.')) + '</p>' +
+      '</div></div>' : '');
+  }
+
+  function initProgramAccordions() {
+    var data = window.AGLOBAL_PROGRAMS || {};
+    var cards = Array.prototype.slice.call(document.querySelectorAll('[data-program]'));
+    if (!cards.length) return;
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var entries = [];
+
+    cards.forEach(function (card) {
+      var id = card.getAttribute('data-program');
+      var p = data[id];
+      var btn = card.querySelector('.program-card__toggle') || card.querySelector(':scope > button[aria-expanded]');
+
+      if (!btn) {
+        if (!p) return;
+        renderProgramCard(card, id, p);
+        btn = card.querySelector('.program-card__toggle');
+      }
+
+      var panel = card.querySelector('[data-program-details]');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'program-details-' + id;
+        panel.className = 'program-card__details overflow-hidden';
+        panel.setAttribute('data-program-details', '');
+        panel.style.height = '0px';
+        panel.style.opacity = '0';
+        btn.insertAdjacentElement('afterend', panel);
+        btn.setAttribute('aria-controls', panel.id);
+      }
+      if (!p) {
+        // No data yet for this program: leave the card as a static summary.
+        btn.removeAttribute('aria-expanded');
+        btn.classList.remove('cursor-pointer');
+        var chev = btn.querySelector('.transition-transform');
+        if (chev) chev.style.display = 'none';
+        return;
+      }
+
+      panel.innerHTML = renderProgramDetails(p);
+      panel.hidden = true;
+
+      var chevWrap = btn.querySelector('svg.lucide-chevron-down');
+      chevWrap = chevWrap ? (chevWrap.closest('.transition-transform') || chevWrap) : null;
+      var group = card.closest('[data-program-list]') || card.closest('.grid') || document.body;
+
+      function setExpanded(open, instant) {
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        card.classList.toggle('is-open', open);
+        if (chevWrap) {
+          chevWrap.classList.toggle('rotate-180', open);
+          chevWrap.classList.toggle('bg-mist', open);
+        }
+        if (panel._onEnd) { panel.removeEventListener('transitionend', panel._onEnd); panel._onEnd = null; }
+
+        if (instant || reduceMotion) {
+          panel.hidden = !open;
+          panel.style.height = open ? 'auto' : '0px';
+          panel.style.opacity = open ? '1' : '0';
+          return;
+        }
+
+        if (open) {
+          panel.hidden = false;
+          panel.style.height = '0px';
+          void panel.offsetHeight;
+          panel.style.height = panel.scrollHeight + 'px';
+          panel.style.opacity = '1';
+          panel._onEnd = function (e) {
+            if (e.target !== panel || e.propertyName !== 'height') return;
+            panel.style.height = 'auto';
+            panel.removeEventListener('transitionend', panel._onEnd);
+            panel._onEnd = null;
+          };
+        } else {
+          panel.style.height = panel.getBoundingClientRect().height + 'px';
+          void panel.offsetHeight;
+          panel.style.height = '0px';
+          panel.style.opacity = '0';
+          panel._onEnd = function (e) {
+            if (e.target !== panel || e.propertyName !== 'height') return;
+            if (btn.getAttribute('aria-expanded') !== 'true') panel.hidden = true;
+            panel.removeEventListener('transitionend', panel._onEnd);
+            panel._onEnd = null;
+          };
+        }
+        panel.addEventListener('transitionend', panel._onEnd);
+      }
+
+      var entry = { card: card, group: group, btn: btn, setExpanded: setExpanded };
+      entries.push(entry);
+      setExpanded(false, true);
+
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var willOpen = btn.getAttribute('aria-expanded') !== 'true';
+        if (willOpen) {
+          entries.forEach(function (other) {
+            if (other !== entry && other.group === group && other.btn.getAttribute('aria-expanded') === 'true') {
+              other.setExpanded(false, true); // close instantly so the page doesn't jump mid-animation
+            }
+          });
+        }
+        setExpanded(willOpen);
+        if (willOpen) {
+          // Keep the opened card's header in view if closing another card shifted the layout.
+          var top = card.getBoundingClientRect().top;
+          if (top < 80) {
+            window.scrollTo({ top: window.pageYOffset + top - 120, behavior: reduceMotion ? 'auto' : 'smooth' });
+          }
+        }
+      });
+
+      // Handbook links live outside the toggle; stop bubbling anyway so no
+      // ancestor click handler can ever treat a download as a toggle.
+      Array.prototype.forEach.call(card.querySelectorAll('.program-card__handbook a'), function (a) {
+        a.addEventListener('click', function (e) { e.stopPropagation(); });
+      });
+    });
+
+    // Open a program directly from a link such as technology.html#program-data-science
+    var hash = (window.location.hash || '').replace(/^#program-/, '');
+    if (hash) {
+      entries.forEach(function (en) {
+        if (en.card.getAttribute('data-program') === hash) {
+          en.setExpanded(true, true);
+          setTimeout(function () { en.card.scrollIntoView({ block: 'start' }); }, 50);
+        }
+      });
+    }
+  }
+
   /* ---------- Fees & Aid FAQ accordion ---------- */
+  // Single-open accordion: opening a question closes whichever question was
+  // open before it. Clicking an open question closes it.
   function initFaqAccordion() {
     var faqSection = document.getElementById('faq');
     if (!faqSection) return;
-    var triggers = faqSection.querySelectorAll('button[id^="radix-"]');
+    var triggers = Array.prototype.slice.call(faqSection.querySelectorAll('button[id^="radix-"]'));
     if (!triggers.length) return;
+
+    function isOpen(btn) {
+      return btn.getAttribute('aria-expanded') === 'true' || btn.getAttribute('data-state') === 'open';
+    }
+
+    function setState(btn, open) {
+      var state = open ? 'open' : 'closed';
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('data-state', state);
+
+      // Keep the item wrapper and heading in sync (Radix data-state markup).
+      var heading = btn.closest('h3');
+      if (heading) heading.setAttribute('data-state', state);
+      var item = heading ? heading.parentElement : null;
+      if (item && item !== faqSection) item.setAttribute('data-state', state);
+
+      var btnId = btn.getAttribute('id');
+      var panel = btnId ? faqSection.querySelector('[aria-labelledby="' + btnId + '"]') : null;
+      if (panel) {
+        panel.setAttribute('data-state', state);
+        if (open) panel.removeAttribute('hidden');
+        else panel.setAttribute('hidden', '');
+      }
+
+      var icon = btn.querySelector('svg');
+      if (icon) icon.style.transform = open ? 'rotate(180deg)' : '';
+    }
+
     triggers.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var btnId = btn.getAttribute('id');
-        var panel = btnId ? faqSection.querySelector('[aria-labelledby="' + btnId + '"]') : null;
-        var expanded = btn.getAttribute('aria-expanded') === 'true' || btn.getAttribute('data-state') === 'open';
-        var willOpen = !expanded;
-
-        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-        btn.setAttribute('data-state', willOpen ? 'open' : 'closed');
-
-        if (panel) {
-          panel.setAttribute('data-state', willOpen ? 'open' : 'closed');
-          if (willOpen) {
-            panel.removeAttribute('hidden');
-          } else {
-            panel.setAttribute('hidden', '');
-          }
+        var willOpen = !isOpen(btn);
+        if (willOpen) {
+          triggers.forEach(function (other) {
+            if (other !== btn && isOpen(other)) setState(other, false);
+          });
         }
-
-        var icon = btn.querySelector('svg');
-        if (icon) {
-          icon.style.transform = willOpen ? 'rotate(180deg)' : '';
-        }
+        setState(btn, willOpen);
       });
     });
   }
@@ -392,6 +639,7 @@
     initNavDropdowns();
     initNavFlyouts();
     initExpandableCards();
+    initProgramAccordions();
     initFaqAccordion();
     initNoOpForms();
   });
