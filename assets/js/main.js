@@ -50,7 +50,7 @@
       headline: 'Graduate with Dual Certifications.',
       text: 'Gain a competitive edge with dual certifications backed by industry leaders like Google and Cisco.',
       ctaLabel: 'Apply to A-Global',
-      ctaHref: 'https://aglobal.online/',
+      ctaHref: 'https://portal.aouniversity.edu.ng',
       ctaExternal: true
     }
   ];
@@ -62,7 +62,7 @@
     var img = section.querySelector('img');
     var h1 = section.querySelector('h1');
     var p = section.querySelector('p');
-    var cta = section.querySelector('a.group, a[href="academics.html"], a[href="https://aglobal.online/"]');
+    var cta = section.querySelector('a.group, a[href="academics.html"], a[href="https://portal.aouniversity.edu.ng"]');
     var tabs = Array.prototype.slice.call(section.querySelectorAll('[role="tab"]'));
     var prevBtn = section.querySelector('button[aria-label="Previous slide"]');
     var nextBtn = section.querySelector('button[aria-label="Next slide"]');
@@ -143,6 +143,16 @@
       if (p) p.classList.toggle('hidden', !isOpen);
       if (t) t.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
       if (icon) icon.classList.toggle('rotate-180', isOpen);
+      if (!isOpen && p) {
+        // Collapse any nested flyout (e.g. Undergraduate Programs -> colleges)
+        // so it doesn't reappear pre-opened next time this panel is shown.
+        Array.prototype.slice.call(p.querySelectorAll(':scope > .nav-subwrap')).forEach(function (sub) {
+          var subPanel = sub.querySelector(':scope > .nav-subdropdown');
+          var subTrigger = sub.querySelector(':scope > a');
+          if (subPanel) subPanel.classList.add('hidden');
+          if (subTrigger) subTrigger.setAttribute('aria-expanded', 'false');
+        });
+      }
     }
 
     function closeAll(except) {
@@ -197,6 +207,63 @@
     });
   }
 
+  /* ---------- Nested flyout submenus (e.g. Academics -> Undergraduate Programs -> colleges) ---------- */
+  // These sit beside their parent dropdown item (to the right) rather than
+  // stacking inline, opening on hover/focus and on a first click/tap.
+  function initNavFlyouts() {
+    var wrappers = Array.prototype.slice.call(document.querySelectorAll('.nav-subwrap'));
+    if (!wrappers.length) return;
+
+    wrappers.forEach(function (wrapper) {
+      var trigger = wrapper.querySelector(':scope > a');
+      var panel = wrapper.querySelector(':scope > .nav-subdropdown');
+      if (!trigger || !panel) return;
+      var closeTimer = null;
+
+      function open() {
+        clearTimeout(closeTimer);
+        panel.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+      function close() {
+        panel.classList.add('hidden');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+      function scheduleClose() {
+        clearTimeout(closeTimer);
+        closeTimer = setTimeout(close, 200);
+      }
+
+      wrapper.addEventListener('mouseenter', open);
+      wrapper.addEventListener('mouseleave', scheduleClose);
+      wrapper.addEventListener('focusin', open);
+      wrapper.addEventListener('focusout', function (e) {
+        if (!wrapper.contains(e.relatedTarget)) close();
+      });
+      trigger.addEventListener('click', function (e) {
+        var isOpen = trigger.getAttribute('aria-expanded') === 'true';
+        if (!isOpen) {
+          // First click/tap reveals the submenu instead of navigating away;
+          // a second click on an already-open trigger follows the link.
+          e.preventDefault();
+          e.stopPropagation();
+          open();
+        }
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      wrappers.forEach(function (wrapper) {
+        if (!wrapper.contains(e.target)) {
+          var trigger = wrapper.querySelector(':scope > a');
+          var panel = wrapper.querySelector(':scope > .nav-subdropdown');
+          if (panel) panel.classList.add('hidden');
+          if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+  }
+
   /* ---------- Click-to-expand cards (faculty / leadership / program pages) ---------- */
   // Accordion behaviour: opening a card collapses any other card that's
   // currently open in the same grid, so at most one card is expanded at a
@@ -213,13 +280,20 @@
         if (c.classList.contains('overflow-hidden') && c.classList.contains('bg-card')) { panel = c; break; }
       }
       if (!panel) return;
-      var icon = card.querySelector('svg.lucide-arrow-right');
+      var icon = card.querySelector('svg.lucide-arrow-right, svg.lucide-chevron-down');
+      var rotateEl = icon;
+      var rotateClass = 'rotate-90';
+      if (icon && icon.classList.contains('lucide-chevron-down')) {
+        rotateClass = 'rotate-180';
+        var iconWrap = icon.closest('.transition-transform');
+        if (iconWrap && iconWrap !== icon) rotateEl = iconWrap;
+      }
       var group = card.closest('.grid') || document.body;
       panel.style.transition = 'height 0.35s ease, opacity 0.3s ease';
 
       function setExpanded(willOpen) {
         card.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-        if (icon) icon.classList.toggle('rotate-90', willOpen);
+        if (rotateEl) rotateEl.classList.toggle(rotateClass, willOpen);
         if (willOpen) {
           var target = panel.scrollHeight;
           panel.style.height = target + 'px';
@@ -316,6 +390,7 @@
     initMobileNav();
     initHeroCarousel();
     initNavDropdowns();
+    initNavFlyouts();
     initExpandableCards();
     initFaqAccordion();
     initNoOpForms();
